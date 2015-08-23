@@ -1,19 +1,16 @@
 {
-  "name": "myhubot",
+  "name": "MyHubot",
   "version": "0.0.0",
   "private": true,
 
-  "author": "cymadigan@hotmail.com",
+  "author": "Bot Wrangler <bw@example.com>",
 
-  "description": "A simple helpful robot for your Company",
+  "description": "Delightfully aware robutt",
 
   "dependencies": {
-    "hubot": ">= 2.6.0"
-    "hubot-scripts": ">= 2.5.0"
   },
 
   "engines": {
-    "node": ">= 0.10.x"
-    "npm":  ">= 1.1.x"
+    "node": "0.10.x"
   }
 }

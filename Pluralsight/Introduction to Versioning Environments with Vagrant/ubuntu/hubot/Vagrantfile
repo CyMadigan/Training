@@ -3,4 +3,6 @@ Vagrant.configure(VAGRANT_API_VERSION) do |config|
   config.vm.box = "ubuntu/trusty64"
   config.vm.hostname = "hubot-dev"
   config.vm.provision "shell", path: "./Provisioning/Scripts/provision.sh"
+  
+  # config.vm.synced_folder ".", "/vagrant", type: "rsync", rsync__exclude: [".git/","Projects/myhubot/node_modules"]
 end
