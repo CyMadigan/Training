@@ -1,0 +1,248 @@
+
+# The contents below were provided by the Packer Vagrant post-processor
+
+Vagrant.configure("2") do |config|
+  config.vm.base_mac = "080027CFDAA2"
+end
+
+
+# The contents below (if any) are custom contents provided by the
+# Packer template during image build.
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.require_version ">= 1.6.2"
+
+# override these variables in ~/.vagrant.d/Vagrantfile for your local changes
+$local_username ||= `whoami`.strip
+$local_projects_directory ||= "~/projects/vagrant/"
+$vm_memory ||= "4096"
+$vm_cpus ||= "4"
+$server_root_password = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+#puts "local_username: '#{$local_username}'"
+#puts "local_projects_directory: '#{$local_projects_directory}'"
+
+#if ! File.exists?('./resources/NDP452-KB2901907-x86-x64-AllOS-ENU.exe')
+#  puts '.Net 4.5.2 installer could not be found!'
+#  puts "Please run:\n  wget http://download.microsoft.com/download/E/2/1/E21644B5-2DF2-47C2-91BD-63C560427900/NDP452-KB2901907-x86-x64-AllOS-ENU.exe"
+#  exit 1
+#end
+ 
+#if ! File.exists?('./resources/Octopus.Tentacle.2.6.0.778-x64.msi')
+#  puts 'Octopus Tentacle installer could not be found!'
+#  puts "Please run:\n  wget http://download.octopusdeploy.com/octopus/Octopus.Tentacle.2.6.0.778-x64.msi"
+#  exit 1
+#end
+
+# General project settings
+#################################
+  module OS
+    def OS.windows?
+      (/cygwin|mswin|mingw|bccwin|wince|emx/ =~ RUBY_PLATFORM) != nil
+    end
+    
+    def OS.mac?
+      (/darwin/ =~ RUBY_PLATFORM) != nil
+    end
+    
+    def OS.unix?
+      !OS.windows?
+    end
+    
+    def OS.linux?
+      OS.unix? and not OS.mac?
+    end
+  end
+  
+  is_windows_host = "#{OS.windows?}"
+  # puts "is_windows_host: #{OS.windows?}"
+  if OS.windows?
+    puts "Vagrant launched from windows."
+  elsif OS.mac?
+    puts "Vagrant launched from mac."
+  elsif OS.unix?
+    puts "Vagrant launched from unix."
+  elsif OS.linux?
+    puts "Vagrant launched from linux."
+  else
+    puts "Vagrant launched from unknown platform."
+  end
+  
+  # The project name is base for directories, hostname and alike
+  project_name = "Dev"
+
+  # IP Address for the host only network, change it to anything you like
+  # but please keep it within the IPv4 private network range
+  ip_address = "192.168.56.101"
+
+  # MySQL and PostgreSQL password - feel free to change it to something
+  # more secure (Note: Changing this will require you to update the index.php example file)
+  database_password = "root"
+
+# Vagrant configuration
+#################################
+  Vagrant.configure("2") do |config|
+    #if Vagrant.has_plugin?("vagrant-proxyconf")
+    #  config.proxy.http     = "http://10.206.246.20:8080"
+    #  config.proxy.https    = "http://10.206.246.20:8080"
+    #  config.proxy.no_proxy = "localhost,127.0.0.1"
+    #end
+    
+    # Define VM box to use
+    #################################
+    config.vm.define "vagrant-windows-7_CCM" do |build|
+        build.vm.box = "windows_7_base"
+		build.vm.hostname = "build"
+		build.vm.guest = :windows
+	end
+
+    config.vm.box_version = "1.0.0"
+    #config.vm.box_check_update = true
+    
+    config.vm.communicator = "winrm"
+    
+    # Admin user name and password
+    #################################
+    config.winrm.username = "vagrant"
+    config.winrm.password = "vagrant"
+    
+    config.vm.guest = :windows
+    config.windows.halt_timeout = 15
+    
+    # Set share folder
+    #################################
+    # config.vm.synced_folder "./" , "/var/www/" + project_name + "/", :mount_options => ["dmode=777", "fmode=666"]
+    config.vm.synced_folder "c:/data", "/data", type: "nfs", id: "Data-root", owner: "vagrant", group: "vagrant", mount_options: ["dmode=777","fmode=777"]
+
+    # Set Hostname entries
+    #################################
+	#if Vagrant.has_plugin?("HostsUpdater")
+    #    config.hostsupdater.aliases = [project_name + ".local"]
+    #else
+    #  puts "---   W A R N I N G   ---"
+    #  puts "---   You should install HostManager (vagrant plugin install HostsUpdater)   ---"
+    #end
+    if Vagrant.has_plugin?("vagrant-hostmanager")
+	  # Use hostonly network with a static IP Address and enable
+      # hostmanager so we can have a custom domain for the server
+      # by modifying the host machines hosts file
+      config.hostmanager.enabled = true
+      config.hostmanager.manage_host = true
+      config.vm.define project_name do |node|
+        node.vm.hostname = project_name + ".local"
+        node.vm.network :private_network, ip: ip_address
+        node.hostmanager.aliases = [ "www." + project_name + ".local" ]
+      end
+      config.vm.provision :hostmanager
+    else
+      puts "---   W A R N I N G   ---"
+      puts "---   You should install HostManager (vagrant plugin install hostmanager)   ---"
+	end
+
+    # Port forwarding
+    #################################
+	#config.vm.network "forwarded_port", guest: 6060, host: 6060
+	#config.vm.network "forwarded_port", guest: 7070, host: 7070
+	#config.vm.network "forwarded_port", guest: 8080, host: 8080
+	#config.vm.network "forwarded_port", guest: 9090, host: 9090
+    config.vm.network :forwarded_port, guest: 3389, host: 3389, id: "rdp", auto_correct: true
+	config.vm.network :forwarded_port, guest: 5985, host: 5985, id: "winrm", auto_correct: true
+    config.vm.network :forwarded_port, guest: 22, host: 2222, id: "ssh", auto_correct: true
+    config.vm.network :forwarded_port, guest: 1433, host: 1433, id: "SQL Server Port 1433", auto_correct: true
+    
+    # Provisioners
+    #################################
+	#config.vm.provision :shell, :path => "./Installers/Other/Utils/_Powershell/SushiHangover-PowerShell/installBootstrapper.cmd"
+	#config.vm.provision :shell, :path => "./Installers/Other/Utils/_Powershell/ISESteroids/installBootstrapper.cmd"
+
+	#config.vm.provision :shell, :path => "./Scripts/Install_Powershell.cmd"
+	#config.vm.provision :shell, :inline => "& { ;$ErrorActionPreference = 'Stop';$packageName='Powershell ';$IsPackageInstalled = $false;$matchingPackages = (choco list -lo)|?{ $_.ToLower().StartsWith($packageName.ToLower())};if ($matchingPackages -ne $null) { ;$IsPackageInstalled = ($matchingPackages -ne $null);if ($matchingPackages -isnot [System.Array]) {$matchingPackages = @($matchingPackages)};$matchingPackages|Write-Debug; };'	Checking for {0}' -f $packageName;if (!$IsPackageInstalled) {;cinst $packageName -y;'	{0} Installed (Restarting)' -f $packageName;Restart-Computer -Force;};EXIT $LASTEXITCODE }"
+	config.vm.provision :shell, :path => "./Scripts/Install_Package.ps1", :args => "-packageName 'Powershell '"
+    #config.vm.provision :reload
+    config.vm.provision :shell, inline: "Restart-Computer -Force"	
+	
+    #config.vm.provision :shell, :path => "./Scripts/Install_Boxstarter.cmd"
+	#config.vm.provision :shell, :inline => "& { ;$ErrorActionPreference = 'Stop';$packageName='Boxstarter ';$IsPackageInstalled = $false;$matchingPackages = (choco list -lo)|?{ $_.ToLower().StartsWith($packageName.ToLower())};if ($matchingPackages -ne $null) { ;$IsPackageInstalled = ($matchingPackages -ne $null);if ($matchingPackages -isnot [System.Array]) {$matchingPackages = @($matchingPackages)};$matchingPackages|Write-Debug; };'	Checking for {0}' -f $packageName;if (!$IsPackageInstalled) {;cinst $packageName -y;'	{0} Installed (Restarting)' -f $packageName;Restart-Computer -Force;};EXIT $LASTEXITCODE }"
+	config.vm.provision :shell, :path => "./Scripts/Install_Package.ps1", :args => "-packageName 'Boxstarter '"
+    #config.vm.provision :reload  
+    config.vm.provision :shell, inline: "Restart-Computer -Force"	
+
+	#config.vm.provision :shell, :inline => "& { ;$ErrorActionPreference = 'Stop';$packageName='ImDisk';$IsPackageInstalled = $false;$matchingPackages = (choco list -lo)|?{ $_.ToLower().StartsWith($packageName.ToLower())};if ($matchingPackages -ne $null) { ;$IsPackageInstalled = ($matchingPackages -ne $null);if ($matchingPackages -isnot [System.Array]) {$matchingPackages = @($matchingPackages)};$matchingPackages|Write-Debug; };'	Checking for {0}' -f $packageName;if (!$IsPackageInstalled) {;cinst $packageName -y;'	{0} Installed (Restarting)' -f $packageName;Restart-Computer -Force;};EXIT $LASTEXITCODE }"
+	#config.vm.provision :shell, :path => "./Scripts/Install_Package.ps1", :args => "-packageName 'ImDisk '"
+	#config.vm.provision :shell, :path => "./Scripts/ProvisionDevEnvironment.ps1"
+    config.vm.provision :shell, :privileged => false, :path => "./Scripts/ProvisionVS2013UltimateDevEnvBoxstarter.ps1"
+    #config.vm.provision :shell, :path => "./Scripts/Install_VS2013Dev_Environment.cmd"
+
+    #config.vm.provision :shell, :inline => "apt-get update -qq && apt-get install make ruby1.9.1-dev --no-upgrade --yes"
+    #config.vm.provision :shell, :inline => "gem install chef --version 11.6.0 --no-rdoc --no-ri --conservative"
+
+    #config.vm.provision :shell, :path => "./Scripts/setup_requirements.cmd"
+    #config.vm.provision :shell, :inline => "cinst nano java.jdk puppet"
+    #config.vm.provision :shell, :inline => "puppet module install --force rismoney/chocolatey"
+	#config.vm.provision :puppet do |puppet|
+	#    puppet.manifests_path = "./puppet"
+	#	puppet.manifest_file = "base.pp"
+	#end
+		
+    # Provider specific settings
+    #################################
+    config.vm.provider :virtualbox do |v, override|
+      #v.gui = true
+      host = RbConfig::CONFIG['host_os']
+
+      # Give VM 1/4 system memory & access to all cpu cores on the host
+      if host =~ /darwin/
+        cpus = `sysctl -n hw.ncpu`.to_i
+        # sysctl returns Bytes and we need to convert to MB
+        mem = `sysctl -n hw.memsize`.to_i / 1024 / 1024 / 4
+      elsif host =~ /linux/
+        cpus = `nproc`.to_i
+        # meminfo shows KB and we need to convert to MB
+        mem = `grep 'MemTotal' /proc/meminfo | sed -e 's/MemTotal://' -e 's/ kB//'`.to_i / 1024 / 4
+      else # sorry Windows folks, I can't help you
+        cpus = 2
+        mem = 2048
+      end
+
+      v.customize ["modifyvm", :id, "--memory", mem]
+      v.customize ["modifyvm", :id, "--cpus", cpus]
+      v.customize ["setextradata", "global", "GUI/SuppressMessages", "all" ]
+    end
+    
+    config.vm.provider :vmware_fusion do |v, override|
+      #v.gui = true
+      host = RbConfig::CONFIG['host_os']
+
+      # Give VM 1/4 system memory & access to all cpu cores on the host
+      if host =~ /darwin/
+        cpus = `sysctl -n hw.ncpu`.to_i
+        # sysctl returns Bytes and we need to convert to MB
+        mem = `sysctl -n hw.memsize`.to_i / 1024 / 1024 / 4
+      elsif host =~ /linux/
+        cpus = `nproc`.to_i
+        # meminfo shows KB and we need to convert to MB
+        mem = `grep 'MemTotal' /proc/meminfo | sed -e 's/MemTotal://' -e 's/ kB//'`.to_i / 1024 / 4
+      else # sorry Windows folks, I can't help you
+        cpus = 2
+        mem = 2048
+      end
+
+      v.vmx["memsize"] = mem
+      v.vmx["numvcpus"] = cpus
+      v.vmx["ethernet0.virtualDev"] = "vmxnet3"
+      v.vmx["RemoteDisplay.vnc.enabled"] = "false"
+      v.vmx["RemoteDisplay.vnc.port"] = "5900"
+      v.vmx["scsi0.virtualDev"] = "lsisas1068"
+    end
+    
+    config.vm.provider :vmware_workstation do |v, override|
+      #v.gui = true
+      v.vmx["memsize"] = "2048"
+      v.vmx["numvcpus"] = "2"
+      v.vmx["ethernet0.virtualDev"] = "vmxnet3"
+      v.vmx["RemoteDisplay.vnc.enabled"] = "false"
+      v.vmx["RemoteDisplay.vnc.port"] = "5900"
+      v.vmx["scsi0.virtualDev"] = "lsisas1068"
+    end
+  end
+  
