@@ -13,5 +13,5 @@ dpkg -s npm &>/dev/null || {
 # check if hubot package already installed; if not then we install hubot and cofeescript
 #   sets the symbolic link
 command -v hubot &>/dev/null || {
-  npm install -g hubot coffee-script
+  npm install -g hubot coffee-script yo generator-hubot
 }
